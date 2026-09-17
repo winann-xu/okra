@@ -8,15 +8,15 @@
 
 ## 当前状态
 
-- 阶段：阶段 2 —— M0 完成（仅剩 GitHub push 待 token 补权限），待启动 M1（root helper）
+- 阶段：阶段 2 —— M0 已收口，下一步启动 M1（root helper）
 - 更新时间：2026-09-17
-- 下一步：用户给 token 补 "Contents: Write" 权限 → `git push -u origin main` → M0 收口 → 启动 M1（Helper/ 内 Swift 实现 §7 全部铁律 + 主备源 + DNS 刷新 + 状态文件 + 12h 定时）。
+- 下一步：M1：Helper/ 内 Swift 实现 §7 全部铁律（区块化/备份/原子写/校验/还原）+ 三源拉取降级 + DNS 刷新 + 状态文件 + install/uninstall 子命令；按 M1 验收标准逐项留证据。
 
 ## 里程碑状态表
 
 | 里程碑 | 内容 | 状态 | 验收证据 |
 |---|---|---|---|
-| M0 | 项目骨架（目录结构、SwiftPM 双目标工程、构建脚本、plist 模板、git/GitHub） | ✅ 完成（push 待 token 补权限） | docs/M0-acceptance.md（构建输出、运行验证）；GitHub: github.com/winann-xu/okra |
+| M0 | 项目骨架（目录结构、SwiftPM 双目标工程、构建脚本、plist 模板、git/GitHub） | ✅ 完成（2026-09-17） | docs/M0-acceptance.md（双路径构建、运行验证、push 记录）；GitHub: github.com/winann-xu/okra |
 | M1 | root helper（hosts 区块写入/还原、备份、原子写、主备源、DNS 刷新、状态文件、12h 定时） | ⬜ 未开始 | — |
 | M2 | 菜单栏 App（状态染色、popover 面板、60min 探测、状态文件读取） | ⬜ 未开始 | — |
 | M3 | 设置 / 一键还原 / 卸载（含其余 hosts 内容逐字节保留验证） | ⬜ 未开始 | — |
@@ -36,17 +36,16 @@
 
 ## 待办 / 阻塞
 
-- [ ] 阻塞（唯一）：用户的 fine-grained token 缺 "Contents: Write" 权限 → GitHub Settings → Developer settings → Personal access tokens → 该 token → Repository permissions → Contents 选 Read and write → Save。补好后我 push。
-- [ ] push 完成后：更新 docs/M0-acceptance.md §3 与检查点，M0 正式收口。
-- [ ] M1 开工（无阻塞，可与 push 并行准备）。
-- [ ] 仓库可见性提醒待用户确认：用户以 PUBLIC 创建了 winann-xu/okra；任务书定位"仅个人自用、不公开分发"，建议评估是否转 private（`gh repo edit okra --visibility private`）
-- [x] 阻塞已解除：Xcode 不再需要（D8）；git 身份已配置（xwag14 / xwag14@gmail.com）；gh 已认证，仓库已建
+- [ ] M1 开工（无阻塞）。
+- [ ] 仓库可见性待用户确认：winann-xu/okra 现为 PUBLIC，任务书定位"仅个人自用、不公开分发"，建议转 private（`gh repo edit okra --visibility private`）。
+- [x] 已解除（2026-09-17）：Xcode 27.0 已装（xcodebuild 双 scheme 验证通过）；token 补 "Contents: Write" 后 push 成功；keychain 旧 github.com 凭据条目已删除（git 现走全局 gh 助手）；git 身份已配置（xwag14 / xwag14@gmail.com）；gh 已认证
 
 ## 日志
 
 - 2026-09-17 阶段 0：完成可行性评估与 3 轮网络实测（数据见任务书 §3、§12）；确认范围（仅 GitHub）、技术栈（Swift/SwiftUI）、hosts 铁律、探测周期（60min）、UI 标准、项目名与目录；创建本任务书与本检查点文件。
 - 2026-09-17 M0 启动（用户指令"开始项目"）：环境排查（本机无 Xcode；brew cask xcode 已移除；App Store 无 Xcode；Apple 下载页需登录）；git init（main 默认分支）；创建目录结构 App/、Helper/、Resources/、docs/；骨架代码就绪并 swiftc 编译验证；备源验证与备源 2 URL 勘误（D7）。
-- 2026-09-17 M0 完成（用户指令：参照 02-G_if 构建方式、免 Xcode；提供 GitHub 仓库 okra）：删除 XcodeGen 方案，改为 SwiftPM（Package.swift 双 executableTarget）+ scripts/build.sh（SDK 固定 MacOSX26.5、组装 Okra.app、ad-hoc 签名、helper 入 Resources）；构建通过（30.5s，包体 152K），App 实测启动/驻留/退出正常，helper 可执行；git 身份配置 + 首次提交并推送 winann-xu/okra；任务书更新 D8 与 M0 验收口径。验收证据：docs/M0-acceptance.md。
+- 2026-09-17 M0 完成（用户指令：参照 02-G_if 构建方式、免 Xcode；提供 GitHub 仓库 okra）：删除 XcodeGen 方案，改为 SwiftPM（Package.swift 双 executableTarget）+ scripts/build.sh（SDK 固定 MacOSX26.5、组装 Okra.app、ad-hoc 签名、helper 入 Resources）；构建通过（30.5s，包体 152K），App 实测启动/驻留/退出正常，helper 可执行；git 身份配置 + 首次提交；任务书更新 D8 与 M0 验收口径。
+- 2026-09-17 M0 收口（用户装好 Xcode 27.0 + token 补 Contents:Write 权限）：xcodebuild 双 scheme BUILD SUCCEEDED（Xcode 原生开 Package.swift，无需工程文件）；push 3 提交至 winann-xu/okra（main=54cb5de）；删除 keychain 旧 github.com 凭据（9/12 条目，曾致 403），git 改走全局 gh 助手；M0 验收全绿，证据见 docs/M0-acceptance.md。下一步 M1。
 
 ## 给新 Agent 的交接提示
 

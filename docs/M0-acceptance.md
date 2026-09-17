@@ -33,8 +33,9 @@ OkraHelper skeleton: action=restore（M1 实现实际逻辑）
 
 - git init -b main（main 默认分支）
 - 本地提交 2 个（feat: M0 骨架；docs: 任务书/检查点/证据）
-- 远端：https://github.com/winann-xu/okra.git（用户创建）
-- push：⏳ 阻塞中 —— 用户提供的 fine-grained token（github_pat_ 前缀）缺 "Contents: Write" 权限。实测：REST API 写操作 200（改 description 成功）、git 读 200、git receive-pack 403（"Permission denied"）。→ 用户在 GitHub 该 token 设置页给 Contents 加 Write 后，重跑 `git push -u origin main` 即可。
+- 远端：https://github.com/winann-xu/okra.git（用户创建，PUBLIC）
+- push：✅ 成功（2026-09-17，用户补 token "Contents: Write" 权限后，`git push -u origin main` 推送 3 个提交；远端 main = 54cb5de）
+- 凭据说明：keychain 中 9/12 的旧 github.com 条目（账号 x-access-token，无 okra 写权限，曾致 403）已删除；git 现走全局 gh 凭据助手（新 token）。
 
 ## 4. Xcode 构建验证（2026-09-17，用户安装 Xcode 27.0 后）
 
@@ -51,4 +52,4 @@ $ xcodebuild -scheme OkraHelper -configuration Debug -destination platform=macOS
 
 ## 结论
 
-M0 验收全部通过：构建脚本（SPM 路径）通过、.app 152K 可运行、xcodebuild（Xcode 27 路径）BUILD SUCCEEDED、目录结构符合任务书、git 已初始化（main 默认分支）；仅 GitHub push 等待 token 补 "Contents: Write" 权限（见 §3）。
+M0 验收全部通过：构建脚本（SPM 路径）通过、.app 152K 可运行、xcodebuild（Xcode 27 路径）BUILD SUCCEEDED、目录结构符合任务书、git 已初始化（main 默认分支）并推送 GitHub（github.com/winann-xu/okra）。
