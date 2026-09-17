@@ -53,6 +53,7 @@ struct HostsFile {
     mutating func backup() throws {
         let fm = FileManager.default
         try fm.createDirectory(atPath: Paths.backupDir, withIntermediateDirectories: true)
+        chownSupportToUser()
         let fmt = DateFormatter()
         fmt.dateFormat = "yyyyMMdd-HHmmss"
         let dest = Paths.backupDir + "/hosts-" + fmt.string(from: Date()) + ".bak"
