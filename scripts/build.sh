@@ -13,6 +13,14 @@ SDK=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk
 echo "[1/4] 编译（swift build）..."
 SDKROOT="$SDK" swift build 2>&1
 
+# 入口哨兵：main.swift 无顶层语句时会静默生成空入口（exit 0 但不执行业务代码）。
+# 实际运行并检查 stdout（字符串字面量在 Mach-O 里是 UTF-16，strings 不可靠，行为检查才可靠）。
+_sentinel_dir="$(mktemp -d)"
+out="$(OKRA_SUPPORT_DIR="$_sentinel_dir/okra" ./.build/debug/OkraHelper status 2>&1)"
+echo "$out" | grep -q "尚无状态数据\|最近更新" || {
+    echo "错误：OkraHelper 入口未生效（status 无预期输出：$out）"; exit 1; }
+rm -rf "$_sentinel_dir"
+
 APP="Okra.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"

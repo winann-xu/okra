@@ -15,5 +15,8 @@ xcuserdata/
 *.dmg
 *.dSYM
 
+# M1 验收测试工作目录
+.m1test/
+
 # 日志
 *.log
