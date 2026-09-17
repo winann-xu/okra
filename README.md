@@ -10,8 +10,16 @@ macOS 菜单栏工具：通过管理 /etc/hosts 优化中国大陆访问 GitHub�
 
 ## 构建
 
+主路径（无需 Xcode，仅 CommandLineTools）：
+
 ```bash
 ./scripts/build.sh
+```
+
+Xcode 路径（Xcode 原生打开 Package.swift，无需额外工程文件）：
+
+```bash
+xcodebuild -scheme Okra -configuration Debug -destination platform=macOS build
 ```
 
 产物：`Okra.app`（ad-hoc 签名，含 Resources/OkraHelper）。

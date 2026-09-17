@@ -8,15 +8,15 @@
 
 ## 当前状态
 
-- 阶段：阶段 2 —— M0 已完成，待启动 M1（root helper）
+- 阶段：阶段 2 —— M0 完成（仅剩 GitHub push 待 token 补权限），待启动 M1（root helper）
 - 更新时间：2026-09-17
-- 下一步：启动 M1：实现 §7 全部 hosts 铁律 + 主备源拉取 + DNS 刷新 + 状态文件 + 12h 定时（Helper/ 内，Swift 实现）。
+- 下一步：用户给 token 补 "Contents: Write" 权限 → `git push -u origin main` → M0 收口 → 启动 M1（Helper/ 内 Swift 实现 §7 全部铁律 + 主备源 + DNS 刷新 + 状态文件 + 12h 定时）。
 
 ## 里程碑状态表
 
 | 里程碑 | 内容 | 状态 | 验收证据 |
 |---|---|---|---|
-| M0 | 项目骨架（目录结构、SwiftPM 双目标工程、构建脚本、plist 模板、git/GitHub） | ✅ 完成（2026-09-17） | docs/M0-acceptance.md（构建输出、运行验证、push 记录）；GitHub: github.com/winann-xu/okra |
+| M0 | 项目骨架（目录结构、SwiftPM 双目标工程、构建脚本、plist 模板、git/GitHub） | ✅ 完成（push 待 token 补权限） | docs/M0-acceptance.md（构建输出、运行验证）；GitHub: github.com/winann-xu/okra |
 | M1 | root helper（hosts 区块写入/还原、备份、原子写、主备源、DNS 刷新、状态文件、12h 定时） | ⬜ 未开始 | — |
 | M2 | 菜单栏 App（状态染色、popover 面板、60min 探测、状态文件读取） | ⬜ 未开始 | — |
 | M3 | 设置 / 一键还原 / 卸载（含其余 hosts 内容逐字节保留验证） | ⬜ 未开始 | — |
@@ -36,7 +36,9 @@
 
 ## 待办 / 阻塞
 
-- [ ] M1 开工（无阻塞）
+- [ ] 阻塞（唯一）：用户的 fine-grained token 缺 "Contents: Write" 权限 → GitHub Settings → Developer settings → Personal access tokens → 该 token → Repository permissions → Contents 选 Read and write → Save。补好后我 push。
+- [ ] push 完成后：更新 docs/M0-acceptance.md §3 与检查点，M0 正式收口。
+- [ ] M1 开工（无阻塞，可与 push 并行准备）。
 - [ ] 仓库可见性提醒待用户确认：用户以 PUBLIC 创建了 winann-xu/okra；任务书定位"仅个人自用、不公开分发"，建议评估是否转 private（`gh repo edit okra --visibility private`）
 - [x] 阻塞已解除：Xcode 不再需要（D8）；git 身份已配置（xwag14 / xwag14@gmail.com）；gh 已认证，仓库已建
 

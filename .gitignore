@@ -4,6 +4,7 @@
 
 # SwiftPM / Xcode
 .build/
+.swiftpm/
 build/
 DerivedData/
 xcuserdata/
