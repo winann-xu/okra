@@ -1,0 +1,18 @@
+# macOS
+.DS_Store
+*.swp
+
+# SwiftPM / Xcode
+.build/
+build/
+DerivedData/
+xcuserdata/
+*.xcscmblueprint
+
+# 构建产物
+*.app
+*.dmg
+*.dSYM
+
+# 日志
+*.log
