@@ -5,7 +5,8 @@ import SwiftUI
 /// 底部更新时间 / 探测时间 + [立即更新] [立即探测] [设置]。
 struct MenuBarView: View {
     @EnvironmentObject var model: StatusModel
-    @State private var showSettings = false
+    /// OKRA_PREVIEW_SETTINGS=1 时预览窗口直接打开设置页（UI 验收用，与 OKRA_PREVIEW 同机制）
+    @State private var showSettings = ProcessInfo.processInfo.environment["OKRA_PREVIEW_SETTINGS"] == "1"
 
     var body: some View {
         Group {

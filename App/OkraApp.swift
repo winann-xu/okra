@@ -30,6 +30,8 @@ struct OkraApp: App {
             sem.wait()
             exit(failed ? 1 : 0)
         }
+        // FR1 登录项：SMAppService 注册（幂等；失败仅告警，见 LoginItem）
+        LoginItem.register()
     }
 
     var body: some Scene {
@@ -44,6 +46,7 @@ struct OkraApp: App {
 }
 
 /// 预览形态：主面板以普通窗口展示，便于检视 UI 与自动化验收（M2 交付形态）。
+/// 预览与生产共用同一 bundle，登录项行为保持一致（幂等注册）。
 struct PreviewApp: App {
     @StateObject private var model = StatusModel()
 
@@ -52,6 +55,12 @@ struct PreviewApp: App {
         // 预览模式运行时改回 regular，使窗口正常显示。
         NSApplication.shared.setActivationPolicy(.regular)
         NSApplication.shared.activate(ignoringOtherApps: true)
+        // FR1 登录项：与生产形态一致（幂等）
+        LoginItem.register()
+        // 测试钩子：OKRA_UNREGISTER=1 启动后立即注销登录项（验证卸载链路用）
+        if ProcessInfo.processInfo.environment["OKRA_UNREGISTER"] == "1" {
+            LoginItem.unregister()
+        }
     }
 
     var body: some Scene {
