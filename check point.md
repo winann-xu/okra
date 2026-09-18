@@ -8,9 +8,9 @@
 
 ## 当前状态
 
-- 阶段：阶段 3 —— M2 已收口（App/ 全部实现，核心链路端到端验证通过），下一步启动 M3（设置/一键还原/卸载）
+- 阶段：阶段 3 —— M3 实现完成、沙箱验收 17/17 全绿、登录项/设置页 UI 验证通过；M1/M2/M3 代码已合入 main（2026-09-18）；**待用户真机 E2E 点通**（安装定时服务/改周期/还原/卸载，均需管理员授权对话框，清单见 docs/M3-acceptance.md）
 - 更新时间：2026-09-18
-- 下一步：M3：① SettingsView 补全（更新周期可配、镜像源选择、一键还原、卸载入口，均走 root helper 授权调用）；② helper 增补 restore/uninstall/设置读写命令（或扩展现有命令）；③ 还原后验证"其余 hosts 内容逐字节保留"（任务书 §9 M3 验收）；④ [立即更新] 授权弹窗真实环境实测（M2 遗留）。
+- 下一步：用户按 docs/M3-acceptance.md 的 6 步 E2E 清单真机点通（每步授权后我从 CLI 侧核验状态）→ 收口 M3 → 启动 M4（打包签名公证 + 全新用户账户全流程 + 首次安装流 E2E）
 
 ## 里程碑状态表
 
@@ -19,7 +19,7 @@
 | M0 | 项目骨架（目录结构、SwiftPM 双目标工程、构建脚本、plist 模板、git/GitHub） | ✅ 完成（2026-09-17） | docs/M0-acceptance.md（双路径构建、运行验证、push 记录）；GitHub: github.com/winann-xu/okra |
 | M1 | root helper（hosts 区块写入/还原、备份、原子写、主备源、DNS 刷新、状态文件、12h 定时） | ✅ 完成（2026-09-17） | docs/M1-acceptance.md（scripts/m1-acceptance.sh 沙箱 22 项 + 真实源 6 项全绿；install/uninstall 的 root E2E 归 M4） |
 | M2 | 菜单栏 App（状态染色、popover 面板、60min 探测、状态文件读取） | ✅ 完成（2026-09-18） | docs/M2-acceptance.md（窗口级捕获+Vision OCR 验证 UI 数据与 status.json 一致；20s 短周期实测定时探测；模拟更新验证"更新成功→立即探测"；[立即更新] 弹窗实测归 M3） |
-| M3 | 设置 / 一键还原 / 卸载（含其余 hosts 内容逐字节保留验证） | ⬜ 未开始 | — |
+| M3 | 设置 / 一键还原 / 卸载（含其余 hosts 内容逐字节保留验证） | 🟡 实现完成，待真机 E2E（2026-09-18） | docs/M3-acceptance.md（沙箱 17/17；登录项 register/unregister 状态机实测；设置页窗口级截图 OCR；E2E 六步清单移交用户） |
 | M4 | 打包、签名、公证、首次安装流程端到端 | ⬜ 未开始 | — |
 
 ## 已确认的关键决策（详见任务书 §11）
@@ -52,6 +52,7 @@
 - 2026-09-17 M0 收口（用户装好 Xcode 27.0 + token 补 Contents:Write 权限）：xcodebuild 双 scheme BUILD SUCCEEDED（Xcode 原生开 Package.swift，无需工程文件）；push 3 提交至 winann-xu/okra（main=54cb5de）；删除 keychain 旧 github.com 凭据（9/12 条目，曾致 403），git 改走全局 gh 助手；M0 验收全绿，证据见 docs/M0-acceptance.md。下一步 M1。
 - 2026-09-17 M1 完成：Helper/ 全部 Swift 实现（上一会话已写、未编译验证；本轮接手后逐层排障）：① 修复编译错误（trimmingCharacters 漏接收者）；② 发现并修复最隐蔽缺陷——main.swift 仅声明 func main() 无顶层语句时生成空入口桩（进程静默 exit 0 不执行业务代码），改顶层入口 + build.sh 加行为级入口哨兵；③ 本机 macOS 27 实测 FileManager.moveItem 目标已存在报 EEXIST、裸 rename(2) 正常，原子写改用 rename(2)（D10）；④ commit() 无结尾换行误删末行修复；⑤ 50% 剧变阈值改仅同源生效（D9，否则源切换永久锁死）；⑥ 状态文件 null 字段显式 NSNull 保 schema 恒定；⑦ fetch 支持 file:// 测试源。验收 scripts/m1-acceptance.sh：沙箱 22 项（铁律逐项 + 边界：无结尾换行/标记损坏/剧变/空镜像/他人区块含后续修改）+ 真实三源 6 项（主源 38 条、全源失败保旧配置、主源故障降级备源 1 84 条、还原干净）= 28/28 全绿；App 启动/驻留/退出正常；install/uninstall 非 root 干净报错。任务书新增 D9/D10。下一步 M2。
 - 2026-09-18 M2 完成：App/ 六文件全部实现并构建通过（App 856K + helper 入 Resources）。要点：① 入口分发（OKRA_PREVIEW 窗口预览 / 菜单栏常驻；SceneBuilder 不支持 if/else，用 @main enum 分发两个 App）；② 发现并修复 Info.plist LSUIElement=true 抑制 WindowGroup 开窗（预览模式运行时 setActivationPolicy(.regular)）；③ 探测 5 域 URLSession 并行 10s 超时，写 status.json（更新字段 null 占位保 schema）；④ 2s 轮询 + 60min 探测定时 + 更新成功即时补探 + 启动过期补探；⑤ [立即更新] 经 osascript 管理员授权直跑 helper；⑥ 面板 = 状态灯+结论+5 域名列表+时间+三按钮。验收：本会话 GUI 受限（全屏截屏为空白帧缓冲、AX 树对任何窗口均 0，最小测试 App 亦如此——会话级限制），改用窗口级捕获（screencapture -l<id>）+ Vision OCR 验证：UI 文本/延迟/HTTP 码与 status.json 完全一致（3079/2172/3317/2587/3455ms；200/403/200/404/200；"部分服务异常"/"0/5 域正常"）；OKRA_PROBE_INTERVAL=20 实测定时探测+重新计周期；模拟更新成功 6s 内触发补探（last_probe > last_update）；CGWindowList 交叉验证窗口存在。证据 docs/M2-acceptance.md；人眼确认与 [立即更新] 弹窗实测归 M3。
+- 2026-09-18 M3 提交收口（本会话接手）：接手后首跑构建失败，定位 LoginItem.swift unregister 调试行误用全局 log(String)（26.5 SDK 无 String 重载）→ 改为与 register 一致的 OKRA_DEBUG+stderr 诊断；重建通过（1.1M）、m3-acceptance 复跑 17/17 全绿。发现 M1/M2 分支从未开 PR（main 滞留 M0 收口提交 6169543），违反 AGENT.md GitHub Flow；现从 main 线性链补开 3 个 PR 并依序合并（M1→M2→M3），M3 按 feat/test/docs 三个原子提交推送。下一步：用户真机 E2E 六步（docs/M3-acceptance.md）。
 
 ## 给新 Agent 的交接提示
 
