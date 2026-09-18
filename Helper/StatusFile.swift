@@ -59,10 +59,26 @@ enum StatusIO {
         try data.write(to: URL(fileURLWithPath: Paths.statusFile), options: .atomic)
         try? FileManager.default.setAttributes([.posixPermissions: 0o644],
                                                ofItemAtPath: Paths.statusFile)
+        chownSupportToUser()
     }
 
     static func ensureSupportDir() throws {
         try FileManager.default.createDirectory(atPath: Paths.supportDir,
-                                                withIntermediateDirectories: true)
+                                               withIntermediateDirectories: true)
+        chownSupportToUser()
+    }
+}
+
+/// root 运行时把支持目录/备份目录/状态文件 chown 给对应用户：
+/// App（用户身份）需要目录写权限（原子写依赖目录可写），且要与 helper（root 身份）
+/// 交替读写状态文件；用户名无法解析时静默跳过（不阻塞主流程）。
+func chownSupportToUser() {
+    guard geteuid() == 0 else { return }
+    let home = ProcessInfo.processInfo.environment["OKRA_USER_HOME"] ?? NSHomeDirectory()
+    let name = (home as NSString).lastPathComponent
+    guard !name.isEmpty, let pw = getpwnam(name)?.pointee else { return }
+    for path in [Paths.supportDir, Paths.backupDir, Paths.statusFile] {
+        var st = stat()
+        if stat(path, &st) == 0 { chown(path, pw.pw_uid, pw.pw_gid) }
     }
 }
