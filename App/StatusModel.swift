@@ -4,18 +4,27 @@ import Combine
 /// App 核心状态：
 /// - 每 2s 轮询 status.json → 秒级反映到 UI（任务书 §7）
 /// - 60min 探测排程（FR3）；hosts 更新成功后立即触发一次探测（FR3）
+/// - M3：设置动作（安装/还原/卸载/周期变更）统一走 root helper + 系统授权对话框
 @MainActor
 final class StatusModel: ObservableObject {
     @Published private(set) var snapshot = StatusIO.Snapshot(probes: [])
     @Published var probing = false
     @Published var updating = false
     @Published var lastError: String?
+    @Published private(set) var actionBusy = false
+    @Published var actionFeedback: ActionFeedback?
 
-    /// 60min 探测周期（FR3）。
+    /// 设置动作的一次性反馈（安装/还原/卸载/周期变更）。
+    struct ActionFeedback: Equatable {
+        var text: String
+        var isError: Bool = false
+    }
+
+    /// 探测周期：用户可配（默认 60min，D4 不更频繁）；OKRA_PROBE_INTERVAL（秒）仅测试覆盖。
     static var probeInterval: TimeInterval {
-        guard let s = ProcessInfo.processInfo.environment["OKRA_PROBE_INTERVAL"],
-              let v = Double(s), v > 0 else { return 3600 }
-        return v
+        if let s = ProcessInfo.processInfo.environment["OKRA_PROBE_INTERVAL"],
+           let v = Double(s), v > 0 { return v }
+        return Double(AppSettings.probeIntervalMinutes) * 60
     }
 
     private var pollTimer: Timer?
@@ -109,30 +118,119 @@ final class StatusModel: ObservableObject {
         }
     }
 
-    // MARK: - 手动更新（检查点建议方案，待用户确认）
+    // MARK: - 手动更新（M2 机制保留：osascript 管理员授权直跑 helper）
 
-    /// 立即更新：经系统管理员授权对话框（osascript）运行 root helper。
-    /// launchd 服务为一次性程序，不做标记文件轮询，故不采用 IPC 标记方案
-    /// （任务书 FR2 括号内方案与 §7 一次性架构冲突，见检查点"下一步"）。
     func updateNow() async {
         guard !updating else { return }
         updating = true
         lastError = nil
         defer { updating = false }
+        let (rc, out) = await runHelper("update")
+        if rc == 0 {
+            // 状态文件为唯一事实来源：轮询自动发现更新成功 → 触发更新后探测
+        } else if helperCancelled(out) {
+            lastError = "已取消授权，本次更新未执行"
+        } else {
+            lastError = "更新未完成：\(firstLine(out))"
+        }
+    }
 
-        let fm = FileManager.default
-        let candidates = [
-            "/Library/Okra/OkraHelper",                        // 已安装服务（M4）
-            (Bundle.main.resourcePath ?? "") + "/OkraHelper",  // 随 App 分发的 helper
-        ]
-        guard let helper = candidates.first(where: { !$0.isEmpty && fm.fileExists(atPath: $0) }) else {
-            lastError = "暂不可更新：未找到 helper 程序（安装后提供）"
+    // MARK: - 设置动作（M3：root helper + 系统授权对话框）
+
+    /// 更新周期变更：持久化；已装服务 → 立即以新周期重装服务生效，未装 → 安装时生效。
+    func setUpdateInterval(_ hours: Int) {
+        AppSettings.updateIntervalHours = hours
+        guard !actionBusy else { return }
+        guard ServiceInfo.intervalSeconds != nil else {
+            actionFeedback = ActionFeedback(text: "已保存：安装定时服务后生效")
             return
         }
-        // 以 root 运行，helper 需 OKRA_USER_HOME 定位用户状态目录
+        actionBusy = true
+        actionFeedback = ActionFeedback(text: "等待管理员授权…")
+        Task {
+            let (rc, out) = await self.runHelper("install", ["--interval", String(hours * 3600)],
+                                                 preferAppBundled: true)
+            self.actionBusy = false
+            self.actionFeedback = self.resultFeedback(rc, out,
+                ok: "定时服务已按 \(hours) 小时周期重装",
+                cancel: "已取消授权，周期已保存，下次安装时生效")
+        }
+    }
+
+    /// 探测周期变更：持久化 + 立即重排程（仅 App 侧，不涉及 helper）。
+    func setProbeInterval(_ minutes: Int) {
+        AppSettings.probeIntervalMinutes = minutes
+        scheduleProbe()
+        actionFeedback = ActionFeedback(text: "探测周期已设为 \(minutes / 60) 小时")
+    }
+
+    /// 安装定时服务：root → helper install（复制二进制 + 写 plist + launchd bootstrap，立即运行一次）。
+    func installService() async {
+        guard !actionBusy, ServiceInfo.intervalSeconds == nil else { return }
+        actionBusy = true
+        actionFeedback = ActionFeedback(text: "等待管理员授权…")
+        let (rc, out) = await runHelper("install",
+            ["--interval", String(AppSettings.updateIntervalHours * 3600)], preferAppBundled: true)
+        actionBusy = false
+        actionFeedback = resultFeedback(rc, out,
+            ok: "定时服务已安装：每 \(AppSettings.updateIntervalHours) 小时更新，开机运行",
+            cancel: "已取消授权，服务未安装")
+    }
+
+    /// 一键还原：root → helper restore（移除 Okra 区块，其余 hosts 内容逐字节保留，刷 DNS）。
+    func restoreHosts() async {
+        guard !actionBusy else { return }
+        actionBusy = true
+        actionFeedback = ActionFeedback(text: "等待管理员授权…")
+        let (rc, out) = await runHelper("restore")
+        actionBusy = false
+        actionFeedback = resultFeedback(rc, out,
+            ok: "已还原：Okra 区块已移除，其余 hosts 内容保留",
+            cancel: "已取消授权，未还原")
+    }
+
+    /// 卸载秋葵：停 App 排程 → root 清理（服务/plist/二进制/hosts/状态与备份）
+    /// → 移除登录项 → 退出。
+    func uninstallApp() async {
+        guard !actionBusy else { return }
+        actionBusy = true
+        actionFeedback = ActionFeedback(text: "等待管理员授权…")
+        shutdownScheduling()
+        let (rc, out) = await runHelper("uninstall")
+        LoginItem.unregister()
+        actionBusy = false
+        if rc == 0 {
+            actionFeedback = ActionFeedback(text: "已卸载（服务/hosts/数据已清理），即将退出…")
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            NSApplication.shared.terminate(nil)
+        } else if helperCancelled(out) {
+            actionFeedback = ActionFeedback(text: "已取消授权，未卸载")
+            restartScheduling()
+        } else {
+            actionFeedback = ActionFeedback(text: firstLine(out), isError: true)
+            restartScheduling()
+        }
+    }
+
+    // MARK: - 统一 helper 调用
+
+    /// 经系统管理员授权对话框（osascript）以 root 运行 helper 子命令。
+    /// nonisolated：阻塞的 osascript 进程跑在主 actor 之外，授权弹窗期间 UI 保持响应。
+    /// preferAppBundled：安装时优先用 App 内置 helper（新构建覆盖已装二进制）。
+    nonisolated func runHelper(_ subcommand: String, _ extra: [String] = [],
+                               preferAppBundled: Bool = false) async -> (Int32, String) {
+        let fm = FileManager.default
+        let bundled = (Bundle.main.resourcePath ?? "") + "/OkraHelper"
+        var candidates = ["/Library/Okra/OkraHelper", bundled]
+        if preferAppBundled { candidates = [bundled, "/Library/Okra/OkraHelper"] }
+        guard let helper = candidates.first(where: { !$0.isEmpty && fm.fileExists(atPath: $0) }) else {
+            return (-1, "未找到 helper 程序（请重新构建项目）")
+        }
+        // OKRA_USER_HOME 让 root 定位用户状态目录（helper 据此找状态文件/备份目录）
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        p.arguments = ["-e", "do shell script \"\(helper) update\" with administrator privileges"]
+        p.arguments = ["-e",
+            "do shell script \"\(helper) \(subcommand) \(extra.joined(separator: " "))\" with administrator privileges"]
         var env = ProcessInfo.processInfo.environment
         env["OKRA_USER_HOME"] = NSHomeDirectory()
         p.environment = env
@@ -143,12 +241,42 @@ final class StatusModel: ObservableObject {
             try p.run()
             p.waitUntilExit()
         } catch {
-            lastError = "无法调起授权对话框：\(error.localizedDescription)"
-            return
+            return (-1, "无法调起授权对话框：\(error.localizedDescription)")
         }
-        if p.terminationStatus != 0 {
-            lastError = "更新未执行（拒绝了授权或网络不可用）"
-        }
-        // 状态文件为唯一事实来源：helper 写入后轮询自动发现更新成功 → 触发更新后探测
+        let out = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        return (p.terminationStatus, out)
     }
+
+    /// root 调用结果归一为人话反馈。
+    private func resultFeedback(_ rc: Int32, _ out: String, ok: String, cancel: String) -> ActionFeedback {
+        if rc == 0 { return ActionFeedback(text: ok) }
+        if helperCancelled(out) { return ActionFeedback(text: cancel) }
+        return ActionFeedback(text: firstLine(out), isError: true)
+    }
+
+    // MARK: - 排程开关（卸载前停，取消后恢复）
+
+    private func shutdownScheduling() {
+        pollTimer?.invalidate()
+        pollTimer = nil
+        probeTimer?.invalidate()
+        probeTimer = nil
+    }
+
+    private func restartScheduling() {
+        guard pollTimer == nil else { return }
+        startPolling()
+        scheduleProbe()
+    }
+}
+
+/// 用户取消系统授权对话框（osascript 错误 -128）。
+func helperCancelled(_ out: String) -> Bool {
+    out.contains("error number -128") || out.contains("User cancelled") || out.contains("用户已取消")
+}
+
+/// 输出首个非空行（错误人话化展示用）。
+func firstLine(_ s: String) -> String {
+    (s.split(whereSeparator: { $0 == "\n" }).first.map(String.init) ?? s)
+        .trimmingCharacters(in: .whitespacesAndNewlines)
 }
