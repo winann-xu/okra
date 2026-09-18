@@ -39,8 +39,8 @@
 ## 待办 / 阻塞
 
 - [x] M2 完成（2026-09-18，证据 docs/M2-acceptance.md）。[立即更新] 触发机制已按建议实现（osascript 管理员授权直跑 helper，一次性程序不做 marker 轮询）；授权弹窗真实环境实测归 M3。
-- [ ] M3 开工（无阻塞）。
-- [ ] 仓库可见性待用户确认：winann-xu/okra 现为 PUBLIC，任务书定位"仅个人自用、不公开分发"，建议转 private（`gh repo edit okra --visibility private`）。
+- [x] M3 完成（2026-09-18，实现+沙箱验收；待真机 E2E 六步点通后收口）。
+- [x] 仓库可见性（2026-09-18 用户决策）：保持 public，不改 private（任务书新增 D11）。
 - [ ] M4 前提醒用户：install/uninstall 的 root E2E 需 sudo（launchd bootstrap + 真实 /etc/hosts 实战），届时由用户执行授权。
 - [x] 已解除（2026-09-17）：Xcode 27.0 已装（xcodebuild 双 scheme 验证通过）；token 补 "Contents: Write" 后 push 成功；keychain 旧 github.com 凭据条目已删除（git 现走全局 gh 助手）；git 身份已配置（xwag14 / xwag14@gmail.com）；gh 已认证
 
@@ -53,6 +53,7 @@
 - 2026-09-17 M1 完成：Helper/ 全部 Swift 实现（上一会话已写、未编译验证；本轮接手后逐层排障）：① 修复编译错误（trimmingCharacters 漏接收者）；② 发现并修复最隐蔽缺陷——main.swift 仅声明 func main() 无顶层语句时生成空入口桩（进程静默 exit 0 不执行业务代码），改顶层入口 + build.sh 加行为级入口哨兵；③ 本机 macOS 27 实测 FileManager.moveItem 目标已存在报 EEXIST、裸 rename(2) 正常，原子写改用 rename(2)（D10）；④ commit() 无结尾换行误删末行修复；⑤ 50% 剧变阈值改仅同源生效（D9，否则源切换永久锁死）；⑥ 状态文件 null 字段显式 NSNull 保 schema 恒定；⑦ fetch 支持 file:// 测试源。验收 scripts/m1-acceptance.sh：沙箱 22 项（铁律逐项 + 边界：无结尾换行/标记损坏/剧变/空镜像/他人区块含后续修改）+ 真实三源 6 项（主源 38 条、全源失败保旧配置、主源故障降级备源 1 84 条、还原干净）= 28/28 全绿；App 启动/驻留/退出正常；install/uninstall 非 root 干净报错。任务书新增 D9/D10。下一步 M2。
 - 2026-09-18 M2 完成：App/ 六文件全部实现并构建通过（App 856K + helper 入 Resources）。要点：① 入口分发（OKRA_PREVIEW 窗口预览 / 菜单栏常驻；SceneBuilder 不支持 if/else，用 @main enum 分发两个 App）；② 发现并修复 Info.plist LSUIElement=true 抑制 WindowGroup 开窗（预览模式运行时 setActivationPolicy(.regular)）；③ 探测 5 域 URLSession 并行 10s 超时，写 status.json（更新字段 null 占位保 schema）；④ 2s 轮询 + 60min 探测定时 + 更新成功即时补探 + 启动过期补探；⑤ [立即更新] 经 osascript 管理员授权直跑 helper；⑥ 面板 = 状态灯+结论+5 域名列表+时间+三按钮。验收：本会话 GUI 受限（全屏截屏为空白帧缓冲、AX 树对任何窗口均 0，最小测试 App 亦如此——会话级限制），改用窗口级捕获（screencapture -l<id>）+ Vision OCR 验证：UI 文本/延迟/HTTP 码与 status.json 完全一致（3079/2172/3317/2587/3455ms；200/403/200/404/200；"部分服务异常"/"0/5 域正常"）；OKRA_PROBE_INTERVAL=20 实测定时探测+重新计周期；模拟更新成功 6s 内触发补探（last_probe > last_update）；CGWindowList 交叉验证窗口存在。证据 docs/M2-acceptance.md；人眼确认与 [立即更新] 弹窗实测归 M3。
 - 2026-09-18 M3 提交收口（本会话接手）：接手后首跑构建失败，定位 LoginItem.swift unregister 调试行误用全局 log(String)（26.5 SDK 无 String 重载）→ 改为与 register 一致的 OKRA_DEBUG+stderr 诊断；重建通过（1.1M）、m3-acceptance 复跑 17/17 全绿。发现 M1/M2 分支从未开 PR（main 滞留 M0 收口提交 6169543），违反 AGENT.md GitHub Flow；现从 main 线性链补开 3 个 PR 并依序合并（M1→M2→M3），M3 按 feat/test/docs 三个原子提交推送。下一步：用户真机 E2E 六步（docs/M3-acceptance.md）。
+- 2026-09-18 流程闭环：用户更新 token（补 Pull requests 权限）后，PR #1/#2/#3（M1/M2/M3）依序合并入 main（merge commit，分支已删），main=c453eb5 为最新；merged main 构建验证通过（1.1M）；生产 App 以 open 重启（launchd 持有）、登录项已注册（raw=1）、启动补探测正常（overall=yellow，hosts 内现有 GitHub520 区块逐字节完好）。用户决策仓库保持 public（任务书新增 D11）。下一步：用户真机 E2E 六步（docs/M3-acceptance.md）→ 收口 M3 → 启动 M4。
 
 ## 给新 Agent 的交接提示
 
