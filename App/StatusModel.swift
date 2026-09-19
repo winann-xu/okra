@@ -148,8 +148,7 @@ final class StatusModel: ObservableObject {
         actionBusy = true
         actionFeedback = ActionFeedback(text: "等待管理员授权…")
         Task {
-            let (rc, out) = await self.runHelper("install", ["--interval", String(hours * 3600)],
-                                                 preferAppBundled: true)
+            let (rc, out) = await self.runHelper("install", ["--interval", String(hours * 3600)])
             self.actionBusy = false
             self.actionFeedback = self.resultFeedback(rc, out,
                 ok: "定时服务已按 \(hours) 小时周期重装",
@@ -170,7 +169,7 @@ final class StatusModel: ObservableObject {
         actionBusy = true
         actionFeedback = ActionFeedback(text: "等待管理员授权…")
         let (rc, out) = await runHelper("install",
-            ["--interval", String(AppSettings.updateIntervalHours * 3600)], preferAppBundled: true)
+            ["--interval", String(AppSettings.updateIntervalHours * 3600)])
         actionBusy = false
         actionFeedback = resultFeedback(rc, out,
             ok: "定时服务已安装：每 \(AppSettings.updateIntervalHours) 小时更新，开机运行",
@@ -214,36 +213,65 @@ final class StatusModel: ObservableObject {
 
     // MARK: - 统一 helper 调用
 
-    /// 经系统管理员授权对话框（osascript）以 root 运行 helper 子命令。
-    /// nonisolated：阻塞的 osascript 进程跑在主 actor 之外，授权弹窗期间 UI 保持响应。
-    /// preferAppBundled：安装时优先用 App 内置 helper（新构建覆盖已装二进制）。
-    nonisolated func runHelper(_ subcommand: String, _ extra: [String] = [],
-                               preferAppBundled: Bool = false) async -> (Int32, String) {
+    /// 经系统管理员授权对话框以 root 运行 helper 子命令（对话框由 helper 内的 osascript 调起）。
+    /// nonisolated：阻塞的 helper 进程跑在主 actor 之外，授权弹窗期间 UI 保持响应。
+    /// helper 选择：优先 App 内置副本（与本 App 的调用协议同版本），已装副本仅服务 launchd；
+    /// 已装副本可能来自旧版本（如缺 auth 子命令），故不作为首选。
+    nonisolated func runHelper(_ subcommand: String, _ extra: [String] = []) async -> (Int32, String) {
         let fm = FileManager.default
         let bundled = (Bundle.main.resourcePath ?? "") + "/OkraHelper"
-        var candidates = ["/Library/Okra/OkraHelper", bundled]
-        if preferAppBundled { candidates = [bundled, "/Library/Okra/OkraHelper"] }
+        let candidates = [bundled, "/Library/Okra/OkraHelper"]
         guard let helper = candidates.first(where: { !$0.isEmpty && fm.fileExists(atPath: $0) }) else {
             return (-1, "未找到 helper 程序（请重新构建项目）")
         }
-        // OKRA_USER_HOME 让 root 定位用户状态目录（helper 据此找状态文件/备份目录）
+        // 输出落临时文件而非 Pipe：共享 Pipe 的写端仍被父进程持有，EOF 永不到达，
+        // readDataToEndOfFile 会永久死锁（2026-09-18 实测：授权对话框结束后 UI 全部置灰）。
+        let outURL = fm.temporaryDirectory.appendingPathComponent("okra-helper-\(UUID().uuidString).log")
+        fm.createFile(atPath: outURL.path, contents: nil)
+        guard let outHandle = try? FileHandle(forWritingTo: outURL) else {
+            try? fm.removeItem(at: outURL)
+            return (-1, "无法创建临时输出文件")
+        }
+        // OKRA_USER_HOME 让 root 定位用户状态目录（helper 据此找状态文件/备份目录）。
+        // 提权由 helper（普通二进制）内调 osascript 完成：真机实测（2026-09-18）
+        // 本 App bundle（LSUIElement）直接调 osascript 管理员权限时系统授权对话框
+        // 不出现；"普通二进制 → osascript"形式对话框稳定出现。
         let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        p.arguments = ["-e",
-            "do shell script \"\(helper) \(subcommand) \(extra.joined(separator: " "))\" with administrator privileges"]
+        p.executableURL = URL(fileURLWithPath: helper)
+        p.arguments = ["auth", subcommand] + extra
         var env = ProcessInfo.processInfo.environment
         env["OKRA_USER_HOME"] = NSHomeDirectory()
         p.environment = env
-        let pipe = Pipe()
-        p.standardOutput = pipe
-        p.standardError = pipe
+        p.standardOutput = outHandle
+        p.standardError = outHandle
         do {
             try p.run()
+            try? outHandle.close()   // 父进程释放写端（子进程已持有自己的副本），子进程退出后文件即可读
             p.waitUntilExit()
         } catch {
+            try? outHandle.close()
+            try? fm.removeItem(at: outURL)
             return (-1, "无法调起授权对话框：\(error.localizedDescription)")
         }
-        let out = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        let out = (try? String(contentsOf: outURL, encoding: .utf8)) ?? ""
+        try? fm.removeItem(at: outURL)
+        // OKRA_DEBUG：把每次调用的 rc 与完整输出落盘，便于排查授权对话框问题
+        if ProcessInfo.processInfo.environment["OKRA_DEBUG"] != nil {
+            let logURL = URL(fileURLWithPath: NSHomeDirectory() + "/Library/Logs/Okra-helper-debug.log")
+            let line = "[\(Date())] runHelper \(subcommand) \(extra.joined(separator: " ")): rc=\(p.terminationStatus) out=\n\(out)\n"
+            if let data = line.data(using: .utf8) {
+                let dir = logURL.deletingLastPathComponent()
+                try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+                if !fm.fileExists(atPath: logURL.path) {
+                    fm.createFile(atPath: logURL.path, contents: nil)
+                }
+                if let fh = try? FileHandle(forWritingTo: logURL) {
+                    fh.seekToEndOfFile()
+                    fh.write(data)
+                    try? fh.close()
+                }
+            }
+        }
         return (p.terminationStatus, out)
     }
 

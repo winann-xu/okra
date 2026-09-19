@@ -19,9 +19,10 @@ do {
                             interval: opts["interval"].flatMap(Int.init))
     case "uninstall":
         try Install.uninstall(userHome: opts["user-home"] ?? userHome())
+    case "auth": runAuth(Array(args.dropFirst()))
     case "status": printStatus()
     default:
-        print("用法：OkraHelper [update|restore|install|uninstall|status] [--user-home PATH] [--interval N]")
+        print("用法：OkraHelper [update|restore|install|uninstall|status|auth <子命令> [参数…]] [--user-home PATH] [--interval N]")
     }
 } catch let e as OkraError {
     try? StatusIO.writeUpdate(ok: false, error: e.description, source: nil, entries: nil)
@@ -93,6 +94,43 @@ func runRestore() throws {
     Dns.flush()
     try StatusIO.writeUpdate(ok: true, error: nil, source: nil, entries: 0)
     print("已还原：Okra 区块移除，其余 hosts 内容原样保留")
+}
+
+// MARK: - auth（提权中继）
+
+/// 真机实测（2026-09-18）：LSUIElement 应用 bundle 直接调 osascript
+/// （do shell script … with administrator privileges）时系统授权对话框
+/// 不出现，且调用进程停留在无输出阻塞态；"普通二进制 → osascript"
+/// 形式（同参数）对话框稳定出现。故 App 不直接调 osascript，
+/// 而是调本子命令，由本（普通）二进制发起提权。
+func runAuth(_ sub: [String]) {
+    guard !sub.isEmpty else {
+        print("用法：OkraHelper auth <install|update|restore|uninstall> [参数…]")
+        exit(2)
+    }
+    let selfPath = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath().path
+    // 显式带 OKRA_USER_HOME：提权后的 root 子进程不保证继承本进程环境变量，
+    // 缺了它 root 侧会把状态目录定位到 /var/root。
+    let inner = "env OKRA_USER_HOME=\(shellQuoted(userHome())) "
+        + "\(shellQuoted(selfPath)) " + sub.joined(separator: " ")
+    let p = Process()
+    p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+    p.arguments = ["-e", "do shell script \"\(inner)\" with administrator privileges"]
+    // 不接 Pipe：输出直接继承本进程 stdout/stderr（App 侧已重定向到临时文件）。
+    // 父进程持有写端会让 readDataToEndOfFile 永不返回（App 侧同因改用临时文件）。
+    do {
+        try p.run()
+        p.waitUntilExit()
+    } catch {
+        print("提权失败：无法调起 osascript：\(error.localizedDescription)")
+        exit(1)
+    }
+    exit(p.terminationStatus == 0 ? 0 : 1)
+}
+
+/// 单引号包裹的 shell 字面量（路径可能含空格）。
+func shellQuoted(_ s: String) -> String {
+    "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
 }
 
 // MARK: - status
