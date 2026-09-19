@@ -8,9 +8,9 @@
 
 ## 当前状态
 
-- 阶段：阶段 3 —— M3 实现完成、沙箱验收 17/17 全绿、登录项/设置页 UI 验证通过；M1/M2/M3 代码已合入 main（2026-09-18）；**待用户真机 E2E 点通**（安装定时服务/改周期/还原/卸载，均需管理员授权对话框，清单见 docs/M3-acceptance.md）
-- 更新时间：2026-09-18
-- 下一步：用户按 docs/M3-acceptance.md 的 6 步 E2E 清单真机点通（每步授权后我从 CLI 侧核验状态）→ 收口 M3 → 启动 M4（打包签名公证 + 全新用户账户全流程 + 首次安装流 E2E）
+- 阶段：阶段 3 —— M3 提权路径修复完成（授权对话框不出现 + UI 置灰两个阻塞缺陷），沙箱回归 m1 22+6 / m3 17 全绿；**待用户真机 E2E 点通**（设置动作均需管理员授权对话框，新顺序见 docs/M3-acceptance.md 末节）
+- 更新时间：2026-09-19
+- 下一步：用户按 docs/M3-acceptance.md「E2E 剩余清单」逐项点通（每步授权后我从 CLI 侧核验状态）→ 收口 M3 → 启动 M4（打包签名公证 + 全新用户账户全流程 + 首次安装流 E2E）。阻塞提示：当前 GitHub 直连不可达（见日志 2026-09-19），本轮修复的分支推送待网络恢复后补做。
 
 ## 里程碑状态表
 
@@ -19,7 +19,7 @@
 | M0 | 项目骨架（目录结构、SwiftPM 双目标工程、构建脚本、plist 模板、git/GitHub） | ✅ 完成（2026-09-17） | docs/M0-acceptance.md（双路径构建、运行验证、push 记录）；GitHub: github.com/winann-xu/okra |
 | M1 | root helper（hosts 区块写入/还原、备份、原子写、主备源、DNS 刷新、状态文件、12h 定时） | ✅ 完成（2026-09-17） | docs/M1-acceptance.md（scripts/m1-acceptance.sh 沙箱 22 项 + 真实源 6 项全绿；install/uninstall 的 root E2E 归 M4） |
 | M2 | 菜单栏 App（状态染色、popover 面板、60min 探测、状态文件读取） | ✅ 完成（2026-09-18） | docs/M2-acceptance.md（窗口级捕获+Vision OCR 验证 UI 数据与 status.json 一致；20s 短周期实测定时探测；模拟更新验证"更新成功→立即探测"；[立即更新] 弹窗实测归 M3） |
-| M3 | 设置 / 一键还原 / 卸载（含其余 hosts 内容逐字节保留验证） | 🟡 实现完成，待真机 E2E（2026-09-18） | docs/M3-acceptance.md（沙箱 17/17；登录项 register/unregister 状态机实测；设置页窗口级截图 OCR；E2E 六步清单移交用户） |
+| M3 | 设置 / 一键还原 / 卸载（含其余 hosts 内容逐字节保留验证） | 🟡 实现完成 + 提权路径修复完成，待真机 E2E（2026-09-19） | docs/M3-acceptance.md（沙箱 17/17；m1 沙箱 22+真实源 6 回归；登录项 register/unregister 实测；设置页窗口级截图 OCR；E2E 剩余清单已更新） |
 | M4 | 打包、签名、公证、首次安装流程端到端 | ⬜ 未开始 | — |
 
 ## 已确认的关键决策（详见任务书 §11）
@@ -43,6 +43,7 @@
 - [x] 仓库可见性（2026-09-18 用户决策）：保持 public，不改 private（任务书新增 D11）。
 - [ ] M4 前提醒用户：install/uninstall 的 root E2E 需 sudo（launchd bootstrap + 真实 /etc/hosts 实战），届时由用户执行授权。
 - [x] 已解除（2026-09-17）：Xcode 27.0 已装（xcodebuild 双 scheme 验证通过）；token 补 "Contents: Write" 后 push 成功；keychain 旧 github.com 凭据条目已删除（git 现走全局 gh 助手）；git 身份已配置（xwag14 / xwag14@gmail.com）；gh 已认证
+- [ ] 待网络恢复（2026-09-19 起 GitHub 直连不可达）：推送 fix/helper-auth-relay 分支 → 开 PR → 合并入 main（AGENT.md GitHub Flow）
 
 ## 日志
 
@@ -54,6 +55,9 @@
 - 2026-09-18 M2 完成：App/ 六文件全部实现并构建通过（App 856K + helper 入 Resources）。要点：① 入口分发（OKRA_PREVIEW 窗口预览 / 菜单栏常驻；SceneBuilder 不支持 if/else，用 @main enum 分发两个 App）；② 发现并修复 Info.plist LSUIElement=true 抑制 WindowGroup 开窗（预览模式运行时 setActivationPolicy(.regular)）；③ 探测 5 域 URLSession 并行 10s 超时，写 status.json（更新字段 null 占位保 schema）；④ 2s 轮询 + 60min 探测定时 + 更新成功即时补探 + 启动过期补探；⑤ [立即更新] 经 osascript 管理员授权直跑 helper；⑥ 面板 = 状态灯+结论+5 域名列表+时间+三按钮。验收：本会话 GUI 受限（全屏截屏为空白帧缓冲、AX 树对任何窗口均 0，最小测试 App 亦如此——会话级限制），改用窗口级捕获（screencapture -l<id>）+ Vision OCR 验证：UI 文本/延迟/HTTP 码与 status.json 完全一致（3079/2172/3317/2587/3455ms；200/403/200/404/200；"部分服务异常"/"0/5 域正常"）；OKRA_PROBE_INTERVAL=20 实测定时探测+重新计周期；模拟更新成功 6s 内触发补探（last_probe > last_update）；CGWindowList 交叉验证窗口存在。证据 docs/M2-acceptance.md；人眼确认与 [立即更新] 弹窗实测归 M3。
 - 2026-09-18 M3 提交收口（本会话接手）：接手后首跑构建失败，定位 LoginItem.swift unregister 调试行误用全局 log(String)（26.5 SDK 无 String 重载）→ 改为与 register 一致的 OKRA_DEBUG+stderr 诊断；重建通过（1.1M）、m3-acceptance 复跑 17/17 全绿。发现 M1/M2 分支从未开 PR（main 滞留 M0 收口提交 6169543），违反 AGENT.md GitHub Flow；现从 main 线性链补开 3 个 PR 并依序合并（M1→M2→M3），M3 按 feat/test/docs 三个原子提交推送。下一步：用户真机 E2E 六步（docs/M3-acceptance.md）。
 - 2026-09-18 流程闭环：用户更新 token（补 Pull requests 权限）后，PR #1/#2/#3（M1/M2/M3）依序合并入 main（merge commit，分支已删），main=c453eb5 为最新；merged main 构建验证通过（1.1M）；生产 App 以 open 重启（launchd 持有）、登录项已注册（raw=1）、启动补探测正常（overall=yellow，hosts 内现有 GitHub520 区块逐字节完好）。用户决策仓库保持 public（任务书新增 D11）。下一步：用户真机 E2E 六步（docs/M3-acceptance.md）→ 收口 M3 → 启动 M4。
+- 2026-09-19 E2E 首轮发现与提权路径修复（本会话接手）：接手时工作区留有未提交的在途改动且**编译不通过**（`URL.resolvingSymbolicLinks()` 不存在，已修正为 `resolvingSymlinksInPath()`），说明上一轮的提权修复未走完构建-验证闭环。本轮完成：① helper 新增 `auth` 提权中继子命令（App 不直接调 osascript），输出继承 stdio 不经 Pipe，显式传 `OKRA_USER_HOME`，路径单引号包裹；② App `runHelper` 输出落临时文件（原共享 Pipe 写端被父进程持有 → `readDataToEndOfFile` 永不返回，实测表现为对话框结束后 UI 置灰），`OKRA_DEBUG=1` 落 rc+输出到 `~/Library/Logs/Okra-helper-debug.log`；③ helper 选择改为优先 App 内置副本（已装副本 9/18 旧构建缺 auth），并删掉已无意义的 `preferAppBundled` 参数；④ 修复 dscacheutil 路径（macOS 27 实测 `/usr/sbin/dscacheutil` 不存在→`/usr/bin`，此前每轮更新打警告且 `-flushcache` 从未执行，证据 `~/Library/Application Support/Okra/helper.stdout.log`），子命令非零退出码显式告警。回归：build.sh 通过（含入口哨兵）、m1 沙箱 22/22 + 真实源 6/6、m3 17/17。证据 docs/M3-acceptance.md 末节；任务书新增 D12。本轮改动落在分支 fix/helper-auth-relay（3 个原子提交，本地）。
+- 2026-09-19 网络观测（19:00 CST）：GitHub 直连整体不可达——`github.com` 七个候选 IP（20.205.243.166 / 140.82.112.3 / 140.82.113.3 / 140.82.114.3 / 140.82.121.4 / 140.82.116.3 / 172.182.252.133）:443 全部 6~8s 超时，`raw.githubusercontent.com` 185.199.111.133 超时；同期 www.baidu.com 0.08s、raw.hellogithub.com 0.14s、cdn.jsdelivr.net 0.27s 均 200。故 `git push`/`git fetch`（github.com:443）与 raw 备源因此失败，非 hosts 配置问题；服务保留旧配置的降级行为正确。待网络恢复补推送与 PR。
+- 2026-09-19 已装服务状态核验（CLI 侧，E2E 第 1 步已有证据）：`/Library/LaunchDaemons/com.winann.okra.helper.plist` 存在（RunAtLoad=true，StartInterval=43200，Program=/Library/Okra/OkraHelper，OKRA_USER_HOME 已写）；helper.stdout.log 显示 00:14（RunAtLoad）与 12:14（StartInterval 二轮）两次更新成功，各 39 条目标记；status.json 最近更新 2026-09-19T04:14:39Z（源 hellogithub，39 条，update_ok=true），最近探测 2026-09-19T10:47:00Z（overall=yellow，objects.githubusercontent.com 404 未过）。
 
 ## 给新 Agent 的交接提示
 
