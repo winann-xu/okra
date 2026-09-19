@@ -40,6 +40,20 @@ Build complete! (29.32秒)
 ```
 （Release 包体 708K / zip 200K，远低于 FR6 的 10MB 上限）
 
-## 待办（需用户参与）
-- [ ] **签名路线决策**：自用 ad-hoc（立即可完成）还是 Developer ID + 公证（需付费账号 + 证书）
-- [ ] 首次安装流程在新 macOS 用户账号上的端到端验证（需管理员新建账号并登录；M3 已在现有账号走通同一流程）
+## 发布包独立复核（2026-09-19，解压自 zip）
+```
+du -sh /tmp/okra-release-test/Okra.app            → 708K
+xattr -l Okra.app                                  → com.apple.provenance（无 quarantine）
+codesign --verify --deep --strict                  → valid on disk / satisfies its Designated Requirement
+codesign -dv                                        → Identifier=com.winann.okra  Signature=adhoc  TeamIdentifier=not set
+Info.plist                                          → CFBundleShortVersionString=0.1.0  LSMinimumSystemVersion=13.0
+Contents/Resources/OkraHelper                       → 201512 字节（release 构建产物）
+```
+即：`ditto` 打包未破坏签名密封，本地构建产物无 quarantine 属性（双击即开）。
+
+Release 构建 UI 冒烟（`OKRA_PREVIEW=1 OKRA_PREVIEW_SETTINGS=1 OKRA_UNREGISTER=1` + 窗口级截图 + Vision OCR）：设置页渲染正常——更新排程（两组周期）、定时服务「已安装：每 4 小时自动更新，开机运行」、登录项、镜像源、还原/卸载、关于；未出现 release 优化导致的渲染或崩溃问题。
+
+## 决策与收口（2026-09-19，任务书 D13）
+- **签名路线：自用 ad-hoc**。不做 Developer ID / 公证（本机 0 个有效签名身份；定位仅个人自用、不公开分发）。分发提示：发布包在别的 Mac 首次打开需 `xattr -d com.apple.quarantine Okra.app`。
+- **新 macOS 用户账号验证：免做**（用户决定）。首次安装流程以 M3 真机实测（授权对话框装 helper → RunAtLoad 更新成功 → 状态文件/探测正常）与本节发布包冒烟等效覆盖。
+- 交付物：`dist/Okra-0.1.0.zip`（200K）+ `dist/Okra-0.1.0.zip.sha256`（本地产物，按 .gitignore 不入库）。

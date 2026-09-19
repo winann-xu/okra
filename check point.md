@@ -8,9 +8,9 @@
 
 ## 当前状态
 
-- 阶段：阶段 4 —— **M3 已收口**（真机 E2E 五步全绿：安装/改周期/立即更新/还原/卸载/重装 + 登录项 + hosts 逐字节保留）；M1/M2/M3 全部代码已合入 main（最新 872968b）
+- 阶段：阶段 5 —— **M4 完成，v1 全部里程碑达成**（M0~M4 全绿）；打包交付物 `dist/Okra-0.1.0.zip`（200K，ad-hoc 签名 + SHA-256）
 - 更新时间：2026-09-19
-- 下一步：启动 M4（打包、签名、公证、首次安装流程端到端）。**待用户决策签名路线**：本机 keychain 有效签名身份为 0（无 Developer ID 证书），公证需付费开发者账号；任务书 §9/§10 允许自用走 ad-hoc + `xattr -d com.apple.quarantine`。用户确认后据此更新任务书决策记录并开工。
+- 下一步：v1 已收口。可选后续：① v2 立项评估（HuggingFace，方案见任务书 §8）；② 如需在别的 Mac 使用发布包，首次打开执行 `xattr -d com.apple.quarantine Okra.app`；③ 若将来需要公开分发，再评估 Developer ID + 公证（D13 已记录当前选择）。
 
 ## 里程碑状态表
 
@@ -20,7 +20,7 @@
 | M1 | root helper（hosts 区块写入/还原、备份、原子写、主备源、DNS 刷新、状态文件、12h 定时） | ✅ 完成（2026-09-17） | docs/M1-acceptance.md（scripts/m1-acceptance.sh 沙箱 22 项 + 真实源 6 项全绿；install/uninstall 的 root E2E 归 M4） |
 | M2 | 菜单栏 App（状态染色、popover 面板、60min 探测、状态文件读取） | ✅ 完成（2026-09-18） | docs/M2-acceptance.md（窗口级捕获+Vision OCR 验证 UI 数据与 status.json 一致；20s 短周期实测定时探测；模拟更新验证"更新成功→立即探测"；[立即更新] 弹窗实测归 M3） |
 | M3 | 设置 / 一键还原 / 卸载（含其余 hosts 内容逐字节保留验证） | ✅ 完成（2026-09-19） | docs/M3-acceptance.md（沙箱 17/17 + m1 22/6 回归；真机 E2E 五步全绿：装/改周期/立即更新/还原/卸载/重装；hosts 逐字节实测「写入前备份 == 当前文件去 Okra 区块」；登录项注册/注销/恢复注册实测） |
-| M4 | 打包、签名、公证、首次安装流程端到端 | ⬜ 未开始（待用户定签名路线） | — |
+| M4 | 打包、签名、公证、首次安装流程端到端 | ✅ 完成（2026-09-19，按 D13 口径：自用 ad-hoc、免公证与免新账号验证） | docs/M4-acceptance.md（Release 打包实测：708K App / 200K zip / SHA-256；解压后签名有效、无 quarantine、helper 就位；Release 构建 UI 冒烟 OCR；签名环境事实与 D13 决策） |
 
 ## 已确认的关键决策（详见任务书 §11）
 
@@ -35,6 +35,7 @@
 - D7：备源 2 URL 勘误（521xvwebsites → 521xueweihan/GitHub520），三源均已实测验证（任务书 §7/§11）
 - D9：50% 行数剧变阈值仅同源连续更新生效，源切换不比对（否则主源停摆后备源永远被拒，任务书 §11）
 - D10：原子写用 rename(2) 系统调用（本机 macOS 27 的 FileManager.moveItem 目标已存在时报 EEXIST，实测不可用，任务书 §11）
+- D13（2026-09-19，用户）：M4 签名走自用 ad-hoc（不公证）；免做「新 macOS 用户账号全流程」验证（任务书 §11）
 
 ## 待办 / 阻塞
 
@@ -44,7 +45,8 @@
 - [ ] M4 前提醒用户：install/uninstall 的 root E2E 需 sudo（launchd bootstrap + 真实 /etc/hosts 实战），届时由用户执行授权。
 - [x] 已解除（2026-09-17）：Xcode 27.0 已装（xcodebuild 双 scheme 验证通过）；token 补 "Contents: Write" 后 push 成功；keychain 旧 github.com 凭据条目已删除（git 现走全局 gh 助手）；git 身份已配置（xwag14 / xwag14@gmail.com）；gh 已认证
 - [x] M3 真机 E2E 五步全绿（2026-09-19，证据 docs/M3-acceptance.md「E2E 真机点通结果」）
-- [ ] M4 待用户决策签名路线：Developer ID（需付费账号 + 证书，可公证）还是自用 ad-hoc（+`xattr -d com.apple.quarantine`，任务书 §10 已列）
+- [x] M4 决策与收口（2026-09-19）：签名路线选自用 ad-hoc（不公证）、免做新账号验证（任务书 D13）；打包流程 `scripts/package.sh` 已实测
+- [ ] 分支 feat/m4-release-packaging 待推送合并（GitHub 再次不可达，自动重试中；本地已提交）
 - [x] 2026-09-19 GitHub 恢复后推送并合并：PR #5（fix/helper-auth-relay）已 merge 入 main（4c0ba88），远端分支已删
 
 ## 日志
@@ -64,6 +66,7 @@
 - 2026-09-19 弹层第二轮修复（用户反馈「修好 #4 后再点设置，界面没出来」）：定位为 `.window` 样式弹层内 `ScrollView` 的已知塌缩缺陷（SO 77487268：首次展开正常，其后展开塌缩到极小高度）——设置页外层正是 ScrollView，塌缩后连材质卡片一起变 0 高，观感就是"什么都没有"。修复：设置页去 ScrollView 改平铺 VStack（约 570pt，由弹层按内容撑开），并撤掉上一轮加的固定 460 高度。同时本轮把 launchctl 卸载写法修复（PR #8）合并入 main=a471584；弹层相关改动仍在 PR #7 分支（未合并，待真机确认）。环境侧新增能力：本会话 AX 可用（可读状态项/菜单栏）、可用 screencapture 区域抓帧（/tmp/catch-panel.sh、/tmp/panel-watch.sh）与 Vision OCR（/tmp/ocr）做独立取证。
 - 2026-09-19 用户真机第三轮（授权链路打通 + 发现 launchctl 缺陷）：用户点设置页「4 小时」后授权对话框正常弹出、root 动作执行成功（/Library/Okra/OkraHelper 更新为新构建、plist 写成 StartInterval=14400），但状态文件报 `launchctl bootstrap 失败（rc=5）`，且 `launchctl print` 显示已加载实例仍是 `run interval = 43200`。根因：`bootout` 写成 `<domain> <label>`（无效形式，rc=64，代码忽略返回值）→ 旧实例仍在 → bootstrap EIO(5)。非 root 用 gui/501 域完整复现并验证正确写法 `bootout system/<label>`；修复见 PR #8（已合并）。另用户反馈设置页两组「4 小时」无法区分 → 两个选择器补标题（同 PR #8）。
 - 2026-09-19 M3 收口（真机 E2E 全绿）：用户逐项点通五步，CLI 侧核验——① 改周期 12h→4h：`launchctl print` 的 `run interval = 14400`、`runs=1`、退出码 0（launchctl 写法修复生效，rc=5 报错消失）；② [立即更新]：`status.json` `update_ok=true`、error=null、38 条、helper 日志 `DNS 缓存已刷新`（无 dscacheutil 警告，说明跑的是新构建 helper）；③ [还原 hosts]：58 行/2702 字节、无 Okra 标记、他人 GitHub520 区块（11~57 行、42 条 IP）完好；④ [卸载秋葵]：plist/`/Library/Okra/`/状态目录全不存在、App 自行退出；⑤ 重开 App → [安装定时服务]：登录项恢复注册（`sfltool dumpbtm`：Okra enabled/allowed）、plist 就位、launchd 加载 `run interval=14400`、RunAtLoad 更新成功（`last_update=11:44:21Z`、38 条）、更新后 3 秒自动补探测（`last_probe=11:44:24Z`，符合 FR3）。**hosts 铁律真机逐字节实测**：写入前备份 `hosts-20260919-194420.bak`（2702B/58 行）与「当前 /etc/hosts 去 Okra 区块」`diff` 无输出。PR #7（弹层 window 样式 + 设置页去 ScrollView）与 PR #8（launchctl 卸载写法 + 周期选择器标题）均已合并，main=872968b；`scripts/m1-acceptance.sh`（22/22）与 `scripts/m3-acceptance.sh`（17/17）在 merged main 上复跑通过。M3 收口，进入 M4。
+- 2026-09-19 M4 打包与签名收口：`scripts/build.sh` 支持 `--release`/`OKRA_VERSION`/`OKRA_SIGN_IDENTITY`（Developer ID + hardened runtime + 时间戳，未设则 ad-hoc）并新增签名校验；新增 `scripts/package.sh`（Release → ditto 打包 → `dist/Okra-<版本>.zip` + SHA-256）。实测：Release 构建 29.3s、App 708K、zip 200K、`codesign --verify --deep --strict` 通过、校验和 `3ab39fde…5ee45`；发布包独立复核（解压自 zip）签名仍有效、无 quarantine 属性、helper 随包就位（201512B）、Release 构建跑预览窗口 + OCR 确认设置页渲染正常（测试用副本按 OKRA_UNREGISTER=1 注销登录项，测后重启正式 App 恢复，BTM 指回 /Users/501/01-project/06-okra/Okra.app）。任务书新增 D13：签名选自用 ad-hoc（本机 0 个有效签名身份）、免做新账号验证。M0~M4 全部达成。
 - 2026-09-19 已装服务状态核验（CLI 侧，E2E 第 1 步已有证据）：`/Library/LaunchDaemons/com.winann.okra.helper.plist` 存在（RunAtLoad=true，StartInterval=43200，Program=/Library/Okra/OkraHelper，OKRA_USER_HOME 已写）；helper.stdout.log 显示 00:14（RunAtLoad）与 12:14（StartInterval 二轮）两次更新成功，各 39 条目标记；status.json 最近更新 2026-09-19T04:14:39Z（源 hellogithub，39 条，update_ok=true），最近探测 2026-09-19T10:47:00Z（overall=yellow，objects.githubusercontent.com 404 未过）。
 
 ## 给新 Agent 的交接提示
