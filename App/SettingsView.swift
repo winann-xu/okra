@@ -15,20 +15,21 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                header
-                feedback
-                scheduleSection
-                Divider()
-                serviceSection
-                sourceSection
-                Divider()
-                actionSection
-                aboutSection
-            }
-            .padding(16)
+        // 刻意不用 ScrollView：MenuBarExtra（.window 样式）里的 ScrollView 有已知缺陷——
+        // 首次展开布局正常，之后再次展开会塌缩到极小高度，整页内容不可见（SwiftUI 长期未修问题；
+        // 本项目真机实测「点设置后面板空白」即此症状）。设置页总高约 570pt，弹层按内容撑开即可。
+        VStack(alignment: .leading, spacing: 14) {
+            header
+            feedback
+            scheduleSection
+            Divider()
+            serviceSection
+            sourceSection
+            Divider()
+            actionSection
+            aboutSection
         }
+        .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(.regularMaterial)

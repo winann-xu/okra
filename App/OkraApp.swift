@@ -42,6 +42,10 @@ struct OkraApp: App {
             MenuBarIcon()
                 .environmentObject(model)
         }
+        // 必须显式指定 .window：MenuBarExtra 默认是 .menu（下拉菜单）样式，
+        // 该样式下自定义布局/图形被忽略、点按钮即收起菜单（实测：点「设置」无任何反应）。
+        // 面板与设置页是任意 SwiftUI 视图，需要窗口式弹层。
+        .menuBarExtraStyle(.window)
     }
 }
 

@@ -57,6 +57,8 @@
 | 1 | 点设置动作后系统授权对话框不出现，动作无输出地卡住 | LSUIElement 应用 bundle 直接调 `osascript … with administrator privileges` 不弹窗（9/18 真机实测） | helper 新增 `auth` 中继子命令：App 调普通二进制，由其内部发起 osascript 提权 |
 | 2 | 授权对话框消失后 App UI 全部置灰 | `runHelper` 用共享 Pipe 读输出，写端仍被父进程持有 → `readDataToEndOfFile` 永不返回 | 输出落临时文件；helper 侧 `auth` 直接继承 stdio，不经 Pipe |
 | 3 | 每轮更新 stderr 打「`/usr/sbin/dscacheutil` 不存在」 | macOS 27 该文件位于 `/usr/bin`（实测 `/usr/sbin/dscacheutil` 不存在） | 候选路径取首个可执行者；子命令非零退出码显式告警 |
+| 4 | 生产形态点菜单栏「设置」无任何反应（面板不切换） | `MenuBarExtra` 默认样式是 `.menu`（下拉菜单）：自定义布局/图形被忽略、点按钮即收起菜单。此前 M2/M3 的 UI 验收全部走 `OKRA_PREVIEW` 的 WindowGroup，未覆盖真实弹层形态 | 显式 `.menuBarExtraStyle(.window)`，并把设置页放进固定高度（弹层无外部尺寸约束，ScrollView 需确定高度） |
+| 5 | 修好 #4 后「设置」页再次打开时整页空白（首次展开正常） | `.window` 样式弹层里的 `ScrollView` 有已知缺陷：首次展开布局正常，之后再次展开塌缩到极小高度（[SO 77487268](https://stackoverflow.com/questions/77487268/)，SwiftUI 长期未修）；设置页外层正是 `ScrollView`，塌缩后连材质卡片一起变成 0 高 | 设置页去掉 `ScrollView`，改平铺 `VStack` 由弹层按内容撑开（内容约 570pt）；主面板本就没有 ScrollView |
 
 证据：#3 见 `~/Library/Application Support/Okra/helper.stdout.log`（9/19 00:14 与 12:14 两轮 RunAtLoad/StartInterval 更新均带该警告）。
 
