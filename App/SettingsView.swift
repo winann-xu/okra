@@ -60,6 +60,9 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("更新排程")
                 .font(.subheadline.bold())
+            Text("更新周期（hosts 自动更新）")
+                .font(.caption)
+                .foregroundStyle(.secondary)
             Picker("更新周期", selection: Binding(
                 get: { AppSettings.updateIntervalHours },
                 set: { model.setUpdateInterval($0) }
@@ -70,6 +73,9 @@ struct SettingsView: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
+            Text("探测周期（访问状态检查）")
+                .font(.caption)
+                .foregroundStyle(.secondary)
             Picker("探测周期", selection: Binding(
                 get: { AppSettings.probeIntervalMinutes },
                 set: { model.setProbeInterval($0) }
