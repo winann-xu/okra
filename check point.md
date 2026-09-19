@@ -8,9 +8,9 @@
 
 ## 当前状态
 
-- 阶段：阶段 3 —— M3 提权路径修复完成（授权对话框不出现 + UI 置灰两个阻塞缺陷），沙箱回归 m1 22+6 / m3 17 全绿；**待用户真机 E2E 点通**（设置动作均需管理员授权对话框，新顺序见 docs/M3-acceptance.md 末节）
+- 阶段：阶段 4 —— **M3 已收口**（真机 E2E 五步全绿：安装/改周期/立即更新/还原/卸载/重装 + 登录项 + hosts 逐字节保留）；M1/M2/M3 全部代码已合入 main（最新 872968b）
 - 更新时间：2026-09-19
-- 下一步：用户按 docs/M3-acceptance.md「E2E 剩余清单」逐项点通（每步授权后我从 CLI 侧核验状态）→ 收口 M3 → 启动 M4（打包签名公证 + 全新用户账户全流程 + 首次安装流 E2E）。阻塞提示：当前 GitHub 直连不可达（见日志 2026-09-19），本轮修复的分支推送待网络恢复后补做。
+- 下一步：启动 M4（打包、签名、公证、首次安装流程端到端）。**待用户决策签名路线**：本机 keychain 有效签名身份为 0（无 Developer ID 证书），公证需付费开发者账号；任务书 §9/§10 允许自用走 ad-hoc + `xattr -d com.apple.quarantine`。用户确认后据此更新任务书决策记录并开工。
 
 ## 里程碑状态表
 
@@ -19,8 +19,8 @@
 | M0 | 项目骨架（目录结构、SwiftPM 双目标工程、构建脚本、plist 模板、git/GitHub） | ✅ 完成（2026-09-17） | docs/M0-acceptance.md（双路径构建、运行验证、push 记录）；GitHub: github.com/winann-xu/okra |
 | M1 | root helper（hosts 区块写入/还原、备份、原子写、主备源、DNS 刷新、状态文件、12h 定时） | ✅ 完成（2026-09-17） | docs/M1-acceptance.md（scripts/m1-acceptance.sh 沙箱 22 项 + 真实源 6 项全绿；install/uninstall 的 root E2E 归 M4） |
 | M2 | 菜单栏 App（状态染色、popover 面板、60min 探测、状态文件读取） | ✅ 完成（2026-09-18） | docs/M2-acceptance.md（窗口级捕获+Vision OCR 验证 UI 数据与 status.json 一致；20s 短周期实测定时探测；模拟更新验证"更新成功→立即探测"；[立即更新] 弹窗实测归 M3） |
-| M3 | 设置 / 一键还原 / 卸载（含其余 hosts 内容逐字节保留验证） | 🟡 实现完成 + 提权路径修复完成，待真机 E2E（2026-09-19） | docs/M3-acceptance.md（沙箱 17/17；m1 沙箱 22+真实源 6 回归；登录项 register/unregister 实测；设置页窗口级截图 OCR；E2E 剩余清单已更新） |
-| M4 | 打包、签名、公证、首次安装流程端到端 | ⬜ 未开始 | — |
+| M3 | 设置 / 一键还原 / 卸载（含其余 hosts 内容逐字节保留验证） | ✅ 完成（2026-09-19） | docs/M3-acceptance.md（沙箱 17/17 + m1 22/6 回归；真机 E2E 五步全绿：装/改周期/立即更新/还原/卸载/重装；hosts 逐字节实测「写入前备份 == 当前文件去 Okra 区块」；登录项注册/注销/恢复注册实测） |
+| M4 | 打包、签名、公证、首次安装流程端到端 | ⬜ 未开始（待用户定签名路线） | — |
 
 ## 已确认的关键决策（详见任务书 §11）
 
@@ -43,7 +43,8 @@
 - [x] 仓库可见性（2026-09-18 用户决策）：保持 public，不改 private（任务书新增 D11）。
 - [ ] M4 前提醒用户：install/uninstall 的 root E2E 需 sudo（launchd bootstrap + 真实 /etc/hosts 实战），届时由用户执行授权。
 - [x] 已解除（2026-09-17）：Xcode 27.0 已装（xcodebuild 双 scheme 验证通过）；token 补 "Contents: Write" 后 push 成功；keychain 旧 github.com 凭据条目已删除（git 现走全局 gh 助手）；git 身份已配置（xwag14 / xwag14@gmail.com）；gh 已认证
-- [ ] 待用户真机点通 E2E（提权对话框）：设置→更新周期 4 小时 → [立即更新] → [还原 hosts] → [卸载秋葵] → 重开 App 重装（清单见 docs/M3-acceptance.md 末节）
+- [x] M3 真机 E2E 五步全绿（2026-09-19，证据 docs/M3-acceptance.md「E2E 真机点通结果」）
+- [ ] M4 待用户决策签名路线：Developer ID（需付费账号 + 证书，可公证）还是自用 ad-hoc（+`xattr -d com.apple.quarantine`，任务书 §10 已列）
 - [x] 2026-09-19 GitHub 恢复后推送并合并：PR #5（fix/helper-auth-relay）已 merge 入 main（4c0ba88），远端分支已删
 
 ## 日志
@@ -62,6 +63,7 @@
 - 2026-09-19 生产弹层缺陷（E2E 第二轮，用户报告「点了设置没反应」）：定位为 `MenuBarExtra` 未指定样式，默认走 `.menu`（下拉菜单）——该样式忽略自定义布局/图形、点按钮即收起菜单，故点「设置」看不到任何变化。此前 M2/M3 的 UI 验收全走 `OKRA_PREVIEW` 的 WindowGroup，从未覆盖真实弹层形态，属验收盲区。修复：显式 `.menuBarExtraStyle(.window)` + 设置页固定高度 460（弹层无外部尺寸约束）。已重建（1.1M）并重启 App（pid 42053）。同轮排查证据：`defaults read com.winann.okra` 无 `updateIntervalHours` 键 → 用户未真正触发周期变更；`log show` 无 osascript 记录 → 未发起过提权；AX 树可用（`System Events` 能读到状态项「叶子/状态菜单」、position 1005,4 size 34,24），与检查点旧记录「AX 树返回 0」不一致，后续 GUI 验证可改用 AX + 合成点击（/tmp/click / /tmp/winany）。
 - 2026-09-19 弹层第二轮修复（用户反馈「修好 #4 后再点设置，界面没出来」）：定位为 `.window` 样式弹层内 `ScrollView` 的已知塌缩缺陷（SO 77487268：首次展开正常，其后展开塌缩到极小高度）——设置页外层正是 ScrollView，塌缩后连材质卡片一起变 0 高，观感就是"什么都没有"。修复：设置页去 ScrollView 改平铺 VStack（约 570pt，由弹层按内容撑开），并撤掉上一轮加的固定 460 高度。同时本轮把 launchctl 卸载写法修复（PR #8）合并入 main=a471584；弹层相关改动仍在 PR #7 分支（未合并，待真机确认）。环境侧新增能力：本会话 AX 可用（可读状态项/菜单栏）、可用 screencapture 区域抓帧（/tmp/catch-panel.sh、/tmp/panel-watch.sh）与 Vision OCR（/tmp/ocr）做独立取证。
 - 2026-09-19 用户真机第三轮（授权链路打通 + 发现 launchctl 缺陷）：用户点设置页「4 小时」后授权对话框正常弹出、root 动作执行成功（/Library/Okra/OkraHelper 更新为新构建、plist 写成 StartInterval=14400），但状态文件报 `launchctl bootstrap 失败（rc=5）`，且 `launchctl print` 显示已加载实例仍是 `run interval = 43200`。根因：`bootout` 写成 `<domain> <label>`（无效形式，rc=64，代码忽略返回值）→ 旧实例仍在 → bootstrap EIO(5)。非 root 用 gui/501 域完整复现并验证正确写法 `bootout system/<label>`；修复见 PR #8（已合并）。另用户反馈设置页两组「4 小时」无法区分 → 两个选择器补标题（同 PR #8）。
+- 2026-09-19 M3 收口（真机 E2E 全绿）：用户逐项点通五步，CLI 侧核验——① 改周期 12h→4h：`launchctl print` 的 `run interval = 14400`、`runs=1`、退出码 0（launchctl 写法修复生效，rc=5 报错消失）；② [立即更新]：`status.json` `update_ok=true`、error=null、38 条、helper 日志 `DNS 缓存已刷新`（无 dscacheutil 警告，说明跑的是新构建 helper）；③ [还原 hosts]：58 行/2702 字节、无 Okra 标记、他人 GitHub520 区块（11~57 行、42 条 IP）完好；④ [卸载秋葵]：plist/`/Library/Okra/`/状态目录全不存在、App 自行退出；⑤ 重开 App → [安装定时服务]：登录项恢复注册（`sfltool dumpbtm`：Okra enabled/allowed）、plist 就位、launchd 加载 `run interval=14400`、RunAtLoad 更新成功（`last_update=11:44:21Z`、38 条）、更新后 3 秒自动补探测（`last_probe=11:44:24Z`，符合 FR3）。**hosts 铁律真机逐字节实测**：写入前备份 `hosts-20260919-194420.bak`（2702B/58 行）与「当前 /etc/hosts 去 Okra 区块」`diff` 无输出。PR #7（弹层 window 样式 + 设置页去 ScrollView）与 PR #8（launchctl 卸载写法 + 周期选择器标题）均已合并，main=872968b；`scripts/m1-acceptance.sh`（22/22）与 `scripts/m3-acceptance.sh`（17/17）在 merged main 上复跑通过。M3 收口，进入 M4。
 - 2026-09-19 已装服务状态核验（CLI 侧，E2E 第 1 步已有证据）：`/Library/LaunchDaemons/com.winann.okra.helper.plist` 存在（RunAtLoad=true，StartInterval=43200，Program=/Library/Okra/OkraHelper，OKRA_USER_HOME 已写）；helper.stdout.log 显示 00:14（RunAtLoad）与 12:14（StartInterval 二轮）两次更新成功，各 39 条目标记；status.json 最近更新 2026-09-19T04:14:39Z（源 hellogithub，39 条，update_ok=true），最近探测 2026-09-19T10:47:00Z（overall=yellow，objects.githubusercontent.com 404 未过）。
 
 ## 给新 Agent 的交接提示
