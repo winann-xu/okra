@@ -60,19 +60,52 @@ enum Install {
         try plist.write(toFile: Paths.plistPath, atomically: true, encoding: .utf8)
         try fm.setAttributes([.posixPermissions: 0o644], ofItemAtPath: Paths.plistPath)
 
-        // 移除旧实例（幂等）后加载；失败不回滚（用户可重试 install）
-        bootout()
-        let rc = runLaunchctl(["bootstrap", "system", Paths.plistPath])
-        guard rc == 0 else {
-            throw OkraError("launchctl bootstrap 失败（rc=\(rc)），可重试运行 install")
-        }
+        // 重载服务：先卸载旧实例，再加载（launchctl 卸载是异步的，需等待到位）
+        try reloadService()
         print("launchd 服务已安装：\(Paths.label)（\(interval ?? startInterval)/\(86400)h 定时，开机加载）")
+    }
+
+    /// 重载服务：卸载旧实例 → 等待卸载到位 → bootstrap（含重试与加载结果校验）。
+    /// 注意 launchctl 的 service-target 必须写成 `<domain>/<label>`：
+    /// 旧写法 `bootout system <label>` 报 "Unrecognized target specifier" 且静默不卸载，
+    /// 随后 bootstrap 因"已加载"报 EIO(5)（2026-09-19 真机复现，见 docs/M3-acceptance.md）。
+    private static func reloadService() throws {
+        var lastRC: Int32 = -1
+        for attempt in 1...5 {
+            unloadService()
+            _ = waitFor(loaded: false, seconds: 3)
+            lastRC = runLaunchctl(["bootstrap", "system", Paths.plistPath])
+            if lastRC == 0, waitFor(loaded: true, seconds: 2) { return }
+            print("  提示：第 \(attempt) 次加载未成功（rc=\(lastRC)），重试…")
+            usleep(500_000)
+        }
+        throw OkraError("launchctl 加载服务失败（rc=\(lastRC)，已重试 5 次），可重试运行 install")
+    }
+
+    /// 卸载服务（幂等）。正确写法：`bootout system/<label>`。
+    static func unloadService() {
+        _ = runLaunchctl(["bootout", "system/\(Paths.label)"], quiet: true)
+    }
+
+    private static func isLoaded() -> Bool {
+        runLaunchctl(["print", "system/\(Paths.label)"], quiet: true) == 0
+    }
+
+    /// 轮询等待服务进入指定加载状态。
+    private static func waitFor(loaded: Bool, seconds: Double) -> Bool {
+        let deadline = Date().addingTimeInterval(seconds)
+        while Date() < deadline {
+            if isLoaded() == loaded { return true }
+            usleep(200_000)
+        }
+        return isLoaded() == loaded
     }
 
     /// 卸载：移除服务 + plist + helper 二进制 + 还原 hosts + 清理支持目录。
     static func uninstall(userHome: String) throws {
         try requireRoot()
-        bootout()
+        unloadService()
+        _ = waitFor(loaded: false, seconds: 3)   // 等卸载到位再删 plist
         try? FileManager.default.removeItem(atPath: Paths.plistPath)
         try? FileManager.default.removeItem(atPath: Paths.installDir)
 
@@ -94,12 +127,8 @@ enum Install {
         print("秋葵已卸载（服务/plist/二进制/状态与备份均已清理）")
     }
 
-    private static func bootout() {
-        _ = runLaunchctl(["bootout", "system", Paths.label])
-    }
-
     @discardableResult
-    private static func runLaunchctl(_ args: [String]) -> Int32 {
+    private static func runLaunchctl(_ args: [String], quiet: Bool = false) -> Int32 {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/bin/launchctl")
         p.arguments = args
@@ -110,7 +139,9 @@ enum Install {
             p.waitUntilExit()
             return p.terminationStatus
         } catch {
-            print("警告：launchctl \(args.joined(separator: " ")) 执行失败：\(error.localizedDescription)")
+            if !quiet {
+                print("警告：launchctl \(args.joined(separator: " ")) 执行失败：\(error.localizedDescription)")
+            }
             return -1
         }
     }
