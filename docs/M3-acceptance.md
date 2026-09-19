@@ -74,14 +74,22 @@
 ### 环境观测（2026-09-19 19:00 CST）
 GitHub 直连当前不可达：`github.com` 候选 IP（20.205.243.166、140.82.112.3、140.82.113.3、140.82.114.3、140.82.121.4、140.82.116.3、172.182.252.133）:443 全部 6~8s 超时，`raw.githubusercontent.com` 185.199.111.133 超时；同期 www.baidu.com / raw.hellogithub.com / cdn.jsdelivr.net 均 200 且 <0.3s。即当下 GitHub 链路整体不可达（非 hosts 配置问题），git push 与 raw 备源在此期间不可用。
 
-### E2E 剩余清单（新顺序，需用户点击授权对话框）
-「已装服务」状态下的 helper 二进制为 9/18 旧构建，但 App 侧已改为优先内置 helper，可任选起点：
-1. 设置 → 更新周期改 4 小时 → 授权 → 核验 plist `StartInterval=14400` + `/Library/Okra/OkraHelper` 被新构建覆盖
-2. [立即更新] → 授权 → 核验 `status.json` 的 `last_update` 刷新 + 触发补探测
-3. [还原 hosts] → 二次确认 → 授权 → 核验 Okra 区块移除、他人区块逐字节完好
-4. [卸载秋葵] → 二次确认 → 授权 → 核验 launchd 服务/plist/二进制/状态目录/登录项全清
-5. 重新打开 App → [安装定时服务] → 授权 → 登录项自动恢复注册
-（步骤 1 的「安装」与 12h 定时更新已于 9/19 00:14/12:14 实测通过：plist 存在 + RunAtLoad 更新成功 + StartInterval 二轮触发）
+### E2E 真机点通结果（2026-09-19，全部通过）
+
+用户按清单逐项点击（每步均经系统管理员授权对话框），CLI 侧核验如下：
+
+| 步骤 | 操作 | 核验证据 |
+|---|---|---|
+| 1 | 设置 → 更新周期 12 小时 → 4 小时（各授权一次） | `launchctl print system/com.winann.okra.helper`：`run interval = 14400`、`runs = 1`、`last exit code = 0`；plist `StartInterval=14400`；`/Library/Okra/OkraHelper` 为当日新构建 |
+| 2 | 主面板 [立即更新] | `status.json`：`last_update=2026-09-19T11:35:05Z`、`update_ok=true`、`update_error=null`、源 hellogithub、38 条；helper 日志 `DNS 缓存已刷新`（无 dscacheutil 警告） |
+| 3 | [还原 hosts]（二次确认） | `/etc/hosts` 58 行 / 2702 字节，无任何 Okra 标记；他人 GitHub520 区块完整（第 11 行 Start、第 57 行 End、42 条 IP 记录） |
+| 4 | [卸载秋葵]（二次确认） | plist、`/Library/Okra/`、`~/Library/Application Support/Okra/` 全部不存在；launchd 无该 label；App 自行退出 |
+| 5 | 重新打开 App → [安装定时服务] | 登录项自动恢复注册（`sfltool dumpbtm` 条目 Okra：enabled/allowed，指向 /Users/501/01-project/06-okra/Okra.app）；plist + plist 内 `OKRA_USER_HOME` + `RunAtLoad=true` 就位；launchd 已加载、`run interval = 14400`、`runs = 1`、退出码 0；RunAtLoad 立即更新成功：`last_update=2026-09-19T11:44:21Z`、`update_ok=true`、38 条，`last_probe=11:44:24Z`（更新后 3 秒内自动补探测，符合 FR3） |
+
+**hosts 铁律实测（真机，逐字节）**：本次写入前备份 `backups/hosts-20260919-194420.bak`（2702 字节 / 58 行）与「当前 /etc/hosts 去掉 Okra 区块」的结果 **逐字节一致**（`diff` 无输出），Okra 区块 38 条，他人区块无任何改动。
+
+### 弹层 UI 验收补充（本机独立核验）
+设置页去 `ScrollView` 后，用 `OKRA_PREVIEW=1 OKRA_PREVIEW_SETTINGS=1` 窗口形态 + 窗口级截图 + Vision OCR 逐行确认渲染完整无裁切（窗口 340×508）：更新排程（两组带标题的分段选择器）、定时服务、登录项、镜像源三源、最近更新结果、数据与服务（还原/卸载）、关于 秋葵 0.1.0。截图 `/tmp/okra-settings-preview.png`。
 
 ## 备注
 - sfltool dumpbtm 在无 GUI 会话环境会挂起（已知现象），登录项状态以 SMAppService.status 为准
