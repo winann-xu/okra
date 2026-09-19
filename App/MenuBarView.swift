@@ -12,8 +12,6 @@ struct MenuBarView: View {
         Group {
             if showSettings {
                 SettingsView(onBack: { withAnimation(.easeInOut(duration: 0.15)) { showSettings = false } })
-                    // 弹层没有外部尺寸约束，ScrollView 需要一个确定高度（设置页内容比主面板长）
-                    .frame(height: 460)
             } else {
                 mainPanel
             }
